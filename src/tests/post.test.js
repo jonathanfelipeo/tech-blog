@@ -2,6 +2,10 @@ const request = require('supertest');
 const express = require('express');
 const postRoutes = require('../routes/postRoutes');
 const db = require('../config/db');
+const { createAuthToken } = require('../utils/auth');
+
+process.env.AUTH_TOKEN_SECRET = 'test-only-secret-for-tech-blog';
+const teacherToken = createAuthToken({ id: 1, role: 'teacher', name: 'Prof. Teste' });
 
 // Simulação (mock) do arquivo de conexão com o banco de dados
 jest.mock('../config/db');
@@ -31,6 +35,7 @@ describe('Testes Unitários - CRUD de Postagens', () => {
     // Execução da requisição HTTP simulada
     const response = await request(app)
       .post('/posts')
+      .set('Authorization', `Bearer ${teacherToken}`)
       .send({ title: 'Teste Criação', content: 'Conteúdo mockado', author: 'Prof. Teste' });
 
     // Validações (Expectativas) de status e conteúdo retornado
@@ -52,6 +57,7 @@ describe('Testes Unitários - CRUD de Postagens', () => {
     // Execução da requisição HTTP simulada
     const response = await request(app)
       .put('/posts/uuid-123')
+      .set('Authorization', `Bearer ${teacherToken}`)
       .send({ title: 'Título Editado', content: 'Conteúdo alterado', author: 'Prof. Teste' });
 
     // Validações
@@ -64,10 +70,22 @@ describe('Testes Unitários - CRUD de Postagens', () => {
     db.query.mockResolvedValue({ rows: [{ id: 'uuid-123' }] });
 
     // Execução da requisição HTTP simulada
-    const response = await request(app).delete('/posts/uuid-123');
+    const response = await request(app)
+      .delete('/posts/uuid-123')
+      .set('Authorization', `Bearer ${teacherToken}`);
 
     // Validações
     expect(response.status).toBe(200);
     expect(response.body.message).toBe('Postagem excluída com sucesso.');
+  });
+
+  it('Deve impedir que um aluno crie postagens', async () => {
+    const studentToken = createAuthToken({ id: 2, role: 'student', name: 'Aluno Teste' });
+    const response = await request(app)
+      .post('/posts')
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ title: 'Post indevido', content: 'Conteúdo', author: 'Aluno Teste' });
+
+    expect(response.status).toBe(403);
   });
 });
